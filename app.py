@@ -219,6 +219,7 @@ def _compute_analytics(cur):
         "all_topics": [],
         "course_names": [],
         "course_credits": [],
+        "skills_required": {},
     }
     for sem in semesters:
         courses = sem.get("courses", [])
@@ -235,6 +236,13 @@ def _compute_analytics(cur):
             stats["all_topics"].extend(c.get("topics", []))
             stats["course_names"].append(c.get("course_name", ""))
             stats["course_credits"].append(c.get("credits", 4))
+            
+            # Simple keyword extraction for Skills required overview
+            for topic in c.get("topics", []):
+                words = [w.strip() for w in str(topic).split() if len(w.strip()) > 3]
+                if words:
+                    key_skill = words[-1].title()  # Usually the core noun
+                    stats["skills_required"][key_skill] = stats["skills_required"].get(key_skill, 0) + 1
     return stats
 
 
@@ -906,32 +914,36 @@ def _page_analytics():
         fig.update_layout(height=350, margin=dict(l=20, r=20, t=20, b=20))
         st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
 
-    # Difficulty curve
+    # Skills Extracted Pie Chart
     st.divider()
-    st.subheader("📈 Curriculum Difficulty Progression")
+    st.subheader("🛠️ Skills Required (Percentage Breakdown)")
     st.write(
-        "Based on credit load and course hours — higher values suggest more demanding semesters."
+        "A semantic distribution of the core concepts and skills focused on across this curriculum."
     )
-    difficulty = [
-        c + h * 0.5 for c, h in zip(stats["sem_credits"], stats["sem_hours"])
-    ]
-    fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=stats["sem_names"],
-            y=difficulty,
-            fill="tozeroy",
-            mode="lines+markers",
-            line={"color": "#6B4EFF", "width": 3},
-            marker={"size": 10},
-            fillcolor="rgba(107,78,255,0.1)",
+    
+    # Sort and take top 10 skills to prevent pie chart clutter
+    sorted_skills = sorted(stats["skills_required"].items(), key=lambda x: x[1], reverse=True)[:10]
+    skill_labels = [s[0] for s in sorted_skills]
+    skill_values = [s[1] for s in sorted_skills]
+    
+    if not skill_labels:
+        skill_labels = ["Foundational Skills"]
+        skill_values = [100]
+
+    fig = go.Figure(
+        go.Pie(
+            labels=skill_labels,
+            values=skill_values,
+            hole=0.3,
+            textinfo='label+percent',
+            marker_colors=px.colors.qualitative.Pastel
         )
     )
     fig.update_layout(
-        height=300,
+        height=350,
         margin=dict(l=20, r=20, t=20, b=20),
         plot_bgcolor="rgba(0,0,0,0)",
-        yaxis_title="Difficulty Score",
+        showlegend=False
     )
     st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
 
