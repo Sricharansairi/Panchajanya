@@ -232,17 +232,17 @@ def _compute_analytics(cur):
         stats["total_courses"] += len(courses)
         stats["total_credits"] += sem_credits
         for c in courses:
-            stats["total_topics"] += len(c.get("topics", []))
-            stats["all_topics"].extend(c.get("topics", []))
-            stats["course_names"].append(c.get("course_name", ""))
-            stats["course_credits"].append(c.get("credits", 4))
+            stats["total_topics"] += len(c.get("topics", []))  # type: ignore
+            stats["all_topics"].extend(c.get("topics", []))  # type: ignore
+            stats["course_names"].append(c.get("course_name", ""))  # type: ignore
+            stats["course_credits"].append(c.get("credits", 4))  # type: ignore
             
             # Simple keyword extraction for Skills required overview
             for topic in c.get("topics", []):
                 words = [w.strip() for w in str(topic).split() if len(w.strip()) > 3]
                 if words:
                     key_skill = words[-1].title()  # Usually the core noun
-                    stats["skills_required"][key_skill] = stats["skills_required"].get(key_skill, 0) + 1
+                    stats["skills_required"][key_skill] = stats["skills_required"].get(key_skill, 0) + 1  # type: ignore
     return stats
 
 
@@ -922,7 +922,7 @@ def _page_analytics():
     )
     
     # Sort and take top 10 skills to prevent pie chart clutter
-    sorted_skills = sorted(stats["skills_required"].items(), key=lambda x: x[1], reverse=True)[:10]
+    sorted_skills = sorted(stats["skills_required"].items(), key=lambda x: x[1], reverse=True)[:10]  # type: ignore
     skill_labels = [s[0] for s in sorted_skills]
     skill_values = [s[1] for s in sorted_skills]
     
