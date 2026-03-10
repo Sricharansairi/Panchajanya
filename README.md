@@ -2,6 +2,8 @@
 ### AI-Powered Curriculum Generation Platform
 > Built with Llama 3.3 70B · Groq · OpenRouter · Streamlit · ReportLab
 
+[🚀 View Live App](https://curricuforge-panchajanya.streamlit.app)
+
 ---
 
 ## What is CurricuForge?
@@ -78,6 +80,8 @@ streamlit run app.py
 ```
 
 Open your browser at: **http://localhost:8501**
+
+Or try the live deployed version: **[https://curricuforge-panchajanya.streamlit.app](https://curricuforge-panchajanya.streamlit.app)**
 
 ---
 
