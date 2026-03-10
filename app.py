@@ -82,6 +82,9 @@ st.markdown(
 [data-testid="stDecoration"]{ display: none !important; }
 #MainMenu                   { display: none !important; }
 header[data-testid="stHeader"] { display: none !important; }
+footer { visibility: hidden !important; }
+.viewerBadge_container { display: none !important; }
+.stDeployButton { display: none !important; }
 [data-testid="stTextInput"] input:focus,
 [data-testid="stNumberInput"] input:focus,
 [data-testid="stSelectbox"] > div > div:focus-within {
