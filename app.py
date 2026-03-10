@@ -851,7 +851,7 @@ def _page_analytics():
             margin=dict(l=20, r=20, t=20, b=20),
             plot_bgcolor="rgba(0,0,0,0)",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
 
     with c2:
         st.subheader("📊 Credits per Semester")
@@ -869,7 +869,7 @@ def _page_analytics():
             margin=dict(l=20, r=20, t=20, b=20),
             plot_bgcolor="rgba(0,0,0,0)",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
 
     # Charts row 2
     c3, c4 = st.columns(2)
@@ -891,7 +891,7 @@ def _page_analytics():
             margin=dict(l=20, r=20, t=20, b=20),
             plot_bgcolor="rgba(0,0,0,0)",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
 
     with c4:
         st.subheader("🎯 Credit Distribution")
@@ -904,7 +904,7 @@ def _page_analytics():
             )
         )
         fig.update_layout(height=350, margin=dict(l=20, r=20, t=20, b=20))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
 
     # Difficulty curve
     st.divider()
@@ -933,7 +933,7 @@ def _page_analytics():
         plot_bgcolor="rgba(0,0,0,0)",
         yaxis_title="Difficulty Score",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
 
     # Topic cloud
     st.divider()
@@ -1103,7 +1103,7 @@ def _page_compare():
         margin=dict(l=20, r=20, t=20, b=20),
         plot_bgcolor="rgba(0,0,0,0)",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
 
     # Side-by-side curricula
     st.divider()
