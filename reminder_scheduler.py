@@ -11,27 +11,30 @@ Call save_schedule(data) when user saves their reminder settings.
 
 import json
 import os
-import time
 import smtplib
-import schedule
 import threading
+import time
 from datetime import datetime, date, timedelta
-from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Any
+
+import schedule  # type: ignore
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SCHEDULE_FILE          = "reminder_schedule.json"
-SENT_LOG_FILE          = "reminder_sent_log.json"
-SMTP_SERVER            = "smtp.gmail.com"
-SMTP_PORT              = 587
+SCHEDULE_FILE = "reminder_schedule.json"
+SENT_LOG_FILE = "reminder_sent_log.json"
+SMTP_SERVER = "smtp.gmail.com"
+SMTP_PORT = 587
 CHECK_INTERVAL_MINUTES = 60
 
-_scheduler_started = False   # guard — only ever start one background thread
+_scheduler_started = False  # guard — only ever start one background thread
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PUBLIC API — called from app.py
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def start_scheduler():
     """
@@ -56,12 +59,17 @@ def save_schedule(payload: dict):
     Save reminder schedule to JSON file.
     Called from app.py when user clicks Save Schedule.
     """
-    with open(SCHEDULE_FILE, "w") as f:
+    with open(SCHEDULE_FILE, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
 
 
-def send_test_email(to_email: str, sender_email: str, sender_password: str,
-                    curriculum_title: str, level: str):
+def send_test_email(
+    to_email: str,
+    sender_email: str,
+    sender_password: str,
+    curriculum_title: str,
+    level: str,
+):
     """
     Send a test email to verify credentials.
     Returns (success: bool, message: str).
@@ -91,16 +99,16 @@ def get_upcoming_reminders():
     Return list of upcoming (unsent) reminders for display in the UI.
     Each item: { sem_number, sem_title, trigger, send_date }
     """
-    schedule_data = _load_json(SCHEDULE_FILE, None)
-    sent_log      = _load_json(SENT_LOG_FILE, {})
+    schedule_data = _load_json(SCHEDULE_FILE, {}) # type: ignore
+    sent_log = _load_json(SENT_LOG_FILE, {}) # type: ignore
     if not schedule_data:
         return []
 
-    today    = date.today()
+    today = date.today()
     upcoming = []
 
     for sem in schedule_data.get("semesters", []):
-        sem_num        = str(sem.get("semester_number", ""))
+        sem_num = str(sem.get("semester_number", ""))
         start_date_str = sem.get("start_date", "")
         if not start_date_str:
             continue
@@ -111,18 +119,20 @@ def get_upcoming_reminders():
 
         for key, days, label in [
             ("3_days", 3, "3 days before"),
-            ("1_day",  1, "1 day before"),
+            ("1_day", 1, "1 day before"),
             ("on_day", 0, "Start day"),
         ]:
-            log_key   = f"sem_{sem_num}_{key}"
+            log_key = f"sem_{sem_num}_{key}"
             send_date = start - timedelta(days=days)
             if send_date >= today and not sent_log.get(log_key):
-                upcoming.append({
-                    "sem_number": sem_num,
-                    "sem_title":  sem.get("semester_title", ""),
-                    "trigger":    label,
-                    "send_date":  send_date.strftime("%b %d, %Y"),
-                })
+                upcoming.append(
+                    {
+                        "sem_number": sem_num,
+                        "sem_title": sem.get("semester_title", ""),
+                        "trigger": label,
+                        "send_date": send_date.strftime("%b %d, %Y"),
+                    }
+                )
 
     return sorted(upcoming, key=lambda x: x["send_date"])
 
@@ -131,31 +141,32 @@ def get_upcoming_reminders():
 # INTERNAL — background loop & checker
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _run_loop():
-    _check_and_send()   # run once immediately on start
+    _check_and_send()  # run once immediately on start
     while True:
         schedule.run_pending()
         time.sleep(60)
 
 
 def _check_and_send():
-    schedule_data = _load_json(SCHEDULE_FILE, None)
+    schedule_data = _load_json(SCHEDULE_FILE, {}) # type: ignore
     if not schedule_data:
         return
 
-    to_email        = schedule_data.get("to_email", "")
-    sender_email    = schedule_data.get("sender_email", "")
+    to_email = schedule_data.get("to_email", "")
+    sender_email = schedule_data.get("sender_email", "")
     sender_password = schedule_data.get("sender_password", "")
 
     if not all([to_email, sender_email, sender_password]):
         return
 
-    sent_log  = _load_json(SENT_LOG_FILE, {})
-    today     = date.today()
-    title     = schedule_data.get("curriculum_title", "Curriculum")
+    sent_log = _load_json(SENT_LOG_FILE, {})
+    today = date.today()
+    title = schedule_data.get("curriculum_title", "Curriculum")
 
     for sem in schedule_data.get("semesters", []):
-        sem_num        = str(sem.get("semester_number", ""))
+        sem_num = str(sem.get("semester_number", ""))
         start_date_str = sem.get("start_date", "")
         if not start_date_str:
             continue
@@ -174,12 +185,21 @@ def _check_and_send():
             if sent_log.get(log_key):
                 continue
 
-            subject = _build_subject(title, sem_num, sem.get("semester_title", ""),
-                                     trigger_key, days_until)
-            body    = _build_email_body(schedule_data, sem, days_until, trigger_key)
+            subject = _build_subject(
+                title,
+                sem_num,
+                sem.get("semester_title", ""),
+                trigger_key,
+                days_until,
+            )
+            body = _build_email_body(
+                schedule_data, sem, days_until, trigger_key
+            )
 
             try:
-                _send_email(to_email, sender_email, sender_password, subject, body)
+                _send_email(
+                    to_email, sender_email, sender_password, subject, body
+                )
                 sent_log[log_key] = datetime.now().isoformat()
                 _save_json(SENT_LOG_FILE, sent_log)
                 print(f"[ReminderScheduler] ✅ Sent: {log_key} → {to_email}")
@@ -191,6 +211,7 @@ def _check_and_send():
 # EMAIL BUILDERS
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _build_subject(title, sem_num, sem_title, trigger_key, days_until):
     if trigger_key == "on_day":
         return f"🎓 TODAY: Semester {sem_num} of '{title}' starts now!"
@@ -201,49 +222,61 @@ def _build_subject(title, sem_num, sem_title, trigger_key, days_until):
 
 
 def _build_email_body(schedule_data, sem, days_until, trigger):
-    title     = schedule_data.get("curriculum_title", "Your Curriculum")
-    level     = schedule_data.get("level", "")
-    sem_num   = sem.get("semester_number", "")
+    title = schedule_data.get("curriculum_title", "Your Curriculum")
+    level = schedule_data.get("level", "")
+    sem_num = sem.get("semester_number", "")
     sem_title = sem.get("semester_title", "")
-    sem_date  = sem.get("start_date", "")
-    courses   = sem.get("courses", [])
+    sem_date = sem.get("start_date", "")
+    courses = sem.get("courses", [])
 
     if trigger == "on_day":
         headline = f"🎓 Semester {sem_num} starts TODAY!"
-        intro    = f"Today is the first day of Semester {sem_num}: {sem_title}."
+        intro = f"Today is the first day of Semester {sem_num}: {sem_title}."
     elif days_until == 1:
         headline = f"⏰ Semester {sem_num} starts TOMORROW!"
-        intro    = f"Just 1 day left before Semester {sem_num}: {sem_title} begins."
+        intro = (
+            f"Just 1 day left before Semester {sem_num}: {sem_title} begins."
+        )
     else:
         headline = f"📅 Semester {sem_num} starts in {days_until} days!"
-        intro    = f"You have {days_until} days to prepare for Semester {sem_num}: {sem_title}."
+        intro = f"You have {days_until} days to prepare for Semester {sem_num}: {sem_title}."
 
     lines = [
-        headline, "=" * 55, "",
+        headline,
+        "=" * 55,
+        "",
         f"📚 Curriculum : {title}",
         f"🎓 Level      : {level}",
         f"📋 Semester   : {sem_num} — {sem_title}",
         f"📅 Start Date : {sem_date}",
-        "", intro, "",
+        "",
+        intro,
+        "",
         "─" * 55,
         f"📖 Courses in Semester {sem_num}:",
         "─" * 55,
     ]
 
     for c in courses:
-        lines.append(f"\n  • [{c.get('course_code','')}] {c.get('course_name','')}")
-        lines.append(f"    Credits: {c.get('credits','4')}  |  Hours/week: {c.get('hours_per_week','3')}")
+        lines.append(
+            f"\n  • [{c.get('course_code','')}] {c.get('course_name','')}"
+        )
+        lines.append(
+            f"    Credits: {c.get('credits','4')}  |  Hours/week: {c.get('hours_per_week','3')}"
+        )
         topics = c.get("topics", [])
         if topics:
             lines.append(f"    Topics : {', '.join(topics[:4])}")
 
     lines += [
-        "", "─" * 55,
+        "",
+        "─" * 55,
         "💡 Preparation Tips:",
         "  ✓ Review topics from the previous semester",
         "  ✓ Set up your study schedule for the week",
         "  ✓ Gather study materials for the new courses",
-        "", "=" * 55,
+        "",
+        "=" * 55,
         "Sent by CurricuForge — AI-Powered Curriculum Design",
         f"Date: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}",
         "=" * 55,
@@ -254,8 +287,8 @@ def _build_email_body(schedule_data, sem, days_until, trigger):
 
 def _send_email(to_email, sender_email, sender_password, subject, body):
     msg = MIMEMultipart()
-    msg["From"]    = sender_email
-    msg["To"]      = to_email
+    msg["From"] = sender_email
+    msg["To"] = to_email
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain"))
     with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
@@ -264,16 +297,16 @@ def _send_email(to_email, sender_email, sender_password, subject, body):
         server.sendmail(sender_email, to_email, msg.as_string())
 
 
-def _load_json(path, default):
+def _load_json(path: str, default: Any) -> Any:
     if not os.path.exists(path):
         return default
     try:
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return default
 
 
-def _save_json(path, data):
-    with open(path, "w") as f:
+def _save_json(path: str, data: Any):
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)

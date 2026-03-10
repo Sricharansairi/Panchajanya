@@ -7,15 +7,27 @@ Fallback: OpenRouter
 import os
 import re
 import json
-import requests
 import time
+import requests  # type: ignore
 
 # Load .env file automatically (keys stay in .env, not in code)
 try:
-    from dotenv import load_dotenv
+    from dotenv import load_dotenv  # type: ignore
+
     load_dotenv()
 except ImportError:
     pass  # python-dotenv not installed, fall back to env vars
+
+# Also load from Streamlit secrets (for Streamlit Cloud deployment)
+try:
+    import streamlit as st  # type: ignore
+
+    if hasattr(st, "secrets"):
+        for key in ["GROQ_API_KEY", "OPENROUTER_API_KEY"]:
+            if key in st.secrets and key not in os.environ:
+                os.environ[key] = st.secrets[key]
+except Exception:
+    pass  # Not running in Streamlit context
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CONFIG
@@ -23,33 +35,39 @@ except ImportError:
 
 # Groq — primary (multiple keys: comma-separated)
 # export GROQ_API_KEY='gsk_key1,gsk_key2,gsk_key3'
-GROQ_URL     = "https://api.groq.com/openai/v1/chat/completions"
-GROQ_MODEL   = "llama-3.3-70b-versatile"
-GROQ_KEYS    = [k.strip() for k in os.environ.get("GROQ_API_KEY", "").split(",") if k.strip()]
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_KEYS = [
+    k.strip()
+    for k in os.getenv("GROQ_API_KEY", "").split(",")
+    if k.strip()
+]
+_GROQ_STATE = {"index": 0}
 
 # OpenRouter — fallback
 # export OPENROUTER_API_KEY='sk-or-...'
-OPENROUTER_URL   = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct"
-OPENROUTER_KEY   = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 
-TIMEOUT     = 90
+TIMEOUT = 90
 MAX_RETRIES = 3
 
 # Track which Groq key to use next (round-robin)
-_groq_key_index = 0
+GROQ_KEY_INDEX = 0
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PROMPT BUILDER
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def build_prompt(user_inputs: dict) -> str:
-    skill        = user_inputs.get("skill", "Software Engineering")
-    level        = user_inputs.get("level", "BTech")
-    semesters    = int(user_inputs.get("semesters", 4))
+    skill = user_inputs.get("skill", "Machine Learning")
+    level = user_inputs.get("level", "BTech")
+    semesters = int(user_inputs.get("semesters", 4))
     weekly_hours = int(user_inputs.get("weekly_hours", 20))
-    industry     = user_inputs.get("industry", skill)
+    industry = user_inputs.get("industry", skill)
 
     return f"""You are an expert curriculum designer. Generate a complete, detailed university curriculum.
 
@@ -104,13 +122,13 @@ Output the JSON now:"""
 # GROQ CALLER (primary — round-robin keys)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _next_groq_key():
     """Get next Groq key in round-robin fashion."""
-    global _groq_key_index
     if not GROQ_KEYS:
         return None
-    key = GROQ_KEYS[_groq_key_index % len(GROQ_KEYS)]
-    _groq_key_index += 1
+    key = GROQ_KEYS[_GROQ_STATE["index"] % len(GROQ_KEYS)]
+    _GROQ_STATE["index"] += 1
     return key
 
 
@@ -121,24 +139,32 @@ def call_groq(prompt: str) -> tuple:
 
     last_error = None
     for _ in range(len(GROQ_KEYS)):
-        key = _next_groq_key()
+        current_key = _next_groq_key()
         headers = {
-            "Authorization": f"Bearer {key}",
+            "Authorization": f"Bearer {current_key}",
             "Content-Type": "application/json",
         }
         payload = {
             "model": GROQ_MODEL,
             "messages": [
-                {"role": "system", "content": "You are a curriculum design expert. Output ONLY valid JSON. No markdown, no backticks, no explanation."},
+                {
+                    "role": "system",
+                    "content": "You are a curriculum design expert. Output ONLY valid JSON. No markdown, no backticks, no explanation.",
+                },
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.3,
             "max_tokens": 8192,
         }
         try:
-            r = requests.post(GROQ_URL, headers=headers, json=payload, timeout=TIMEOUT)
+            r = requests.post(
+                GROQ_URL, headers=headers, json=payload, timeout=TIMEOUT
+            )
             if r.status_code == 429:
-                print(f"[AI Engine] Groq key {key[:8]}... rate-limited, trying next key")
+                key_preview = "***"
+                print(
+                    f"[AI Engine] Groq key {key_preview}... rate-limited, trying next key"
+                )
                 last_error = "Rate limited"
                 continue
             r.raise_for_status()
@@ -147,20 +173,24 @@ def call_groq(prompt: str) -> tuple:
                 return text, f"Groq ({GROQ_MODEL})"
         except requests.exceptions.HTTPError as e:
             if e.response and e.response.status_code == 429:
-                print(f"[AI Engine] Groq key rate-limited, rotating...")
+                print("[AI Engine] Groq key rate-limited, rotating...")
                 last_error = "Rate limited"
                 continue
-            raise
+            last_error = str(e)
+            continue
         except Exception as e:
             last_error = str(e)
             continue
 
-    raise ConnectionError(f"All {len(GROQ_KEYS)} Groq keys exhausted. Last error: {last_error}")
+    raise ConnectionError(
+        f"All {len(GROQ_KEYS)} Groq keys exhausted. Last error: {last_error}"
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # OPENROUTER CALLER (fallback)
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def call_openrouter(prompt: str) -> tuple:
     """Call OpenRouter API. Returns (response_text, backend_name)."""
@@ -176,13 +206,18 @@ def call_openrouter(prompt: str) -> tuple:
     payload = {
         "model": OPENROUTER_MODEL,
         "messages": [
-            {"role": "system", "content": "You are a curriculum design expert. Output ONLY valid JSON."},
+            {
+                "role": "system",
+                "content": "You are a curriculum design expert. Output ONLY valid JSON.",
+            },
             {"role": "user", "content": prompt},
         ],
         "temperature": 0.3,
         "max_tokens": 8192,
     }
-    r = requests.post(OPENROUTER_URL, headers=headers, json=payload, timeout=TIMEOUT)
+    r = requests.post(
+        OPENROUTER_URL, headers=headers, json=payload, timeout=TIMEOUT
+    )
     r.raise_for_status()
     text = r.json()["choices"][0]["message"]["content"]
     if not text:
@@ -193,6 +228,7 @@ def call_openrouter(prompt: str) -> tuple:
 # ══════════════════════════════════════════════════════════════════════════════
 # UNIFIED CALLER — Groq first, then OpenRouter
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def call_llm(prompt: str) -> tuple:
     """Try Groq (all keys), then OpenRouter. Returns (response, backend_name)."""
@@ -218,7 +254,9 @@ def call_llm(prompt: str) -> tuple:
     # 3. Nothing available
     msg = "No AI backend available.\n"
     if not GROQ_KEYS:
-        msg += "  • Set GROQ_API_KEY: export GROQ_API_KEY='gsk_key1,gsk_key2'\n"
+        msg += (
+            "  • Set GROQ_API_KEY: export GROQ_API_KEY='gsk_key1,gsk_key2'\n"
+        )
     if not OPENROUTER_KEY:
         msg += "  • Set OPENROUTER_API_KEY: export OPENROUTER_API_KEY='sk-or-...'\n"
     if errors:
@@ -230,28 +268,39 @@ def call_llm(prompt: str) -> tuple:
 # CHAT CALLER — for the chatbot (also Groq → OpenRouter)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def chat_with_llm(user_message: str, history: list, system_prompt: str) -> tuple:
+
+def chat_with_llm(
+    user_message: str, history: list, system_prompt: str
+) -> tuple:
     """Chat mode: Groq first, then OpenRouter. Returns (response, backend_name)."""
     messages = [{"role": "system", "content": system_prompt}]
-    for msg in history[-10:]:
-        messages.append(msg)
+
+    if isinstance(history, list):
+        for msg in history[-10:]:  # type: ignore
+            messages.append(msg)
+
     messages.append({"role": "user", "content": user_message})
 
     errors = []
 
     # 1. Groq
     if GROQ_KEYS:
-        key = _next_groq_key()
+        current_key = _next_groq_key()
         try:
-            r = requests.post(GROQ_URL, headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            }, json={
-                "model": GROQ_MODEL,
-                "messages": messages,
-                "temperature": 0.5,
-                "max_tokens": 1024,
-            }, timeout=TIMEOUT)
+            r = requests.post(
+                GROQ_URL,
+                headers={
+                    "Authorization": f"Bearer {current_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": GROQ_MODEL,
+                    "messages": messages,
+                    "temperature": 0.5,
+                    "max_tokens": 1024,
+                },
+                timeout=TIMEOUT,
+            )
             if r.status_code != 429:
                 r.raise_for_status()
                 return r.json()["choices"][0]["message"]["content"], "Groq"
@@ -262,17 +311,22 @@ def chat_with_llm(user_message: str, history: list, system_prompt: str) -> tuple
     # 2. OpenRouter
     if OPENROUTER_KEY:
         try:
-            r = requests.post(OPENROUTER_URL, headers={
-                "Authorization": f"Bearer {OPENROUTER_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://curricuforge.app",
-                "X-Title": "CurricuForge",
-            }, json={
-                "model": OPENROUTER_MODEL,
-                "messages": messages,
-                "temperature": 0.5,
-                "max_tokens": 1024,
-            }, timeout=TIMEOUT)
+            r = requests.post(
+                OPENROUTER_URL,
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_KEY}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://curricuforge.app",
+                    "X-Title": "CurricuForge",
+                },
+                json={
+                    "model": OPENROUTER_MODEL,
+                    "messages": messages,
+                    "temperature": 0.5,
+                    "max_tokens": 1024,
+                },
+                timeout=TIMEOUT,
+            )
             r.raise_for_status()
             return r.json()["choices"][0]["message"]["content"], "OpenRouter"
         except Exception as e:
@@ -285,9 +339,12 @@ def chat_with_llm(user_message: str, history: list, system_prompt: str) -> tuple
 # JSON EXTRACTOR
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def extract_json(raw: str) -> dict:
     # 1. Direct parse
     try:
+        if not isinstance(raw, str):
+            raw = str(raw)
         return json.loads(raw.strip())
     except json.JSONDecodeError:
         pass
@@ -316,7 +373,11 @@ def extract_json(raw: str) -> dict:
             except json.JSONDecodeError:
                 pass
 
-    raise ValueError(f"Could not extract JSON from response:\n{raw[:500]}")
+    preview_len = min(len(str(raw)), 500)
+    # pyre-ignore[16]
+    raise ValueError(
+        f"Could not extract JSON from response:\n{str(raw)[:preview_len]}"  # type: ignore
+    )
 
 
 def _repair_truncated_json(s):
@@ -327,26 +388,26 @@ def _repair_truncated_json(s):
     if s.count('"') % 2 != 0:
         last_quote = s.rfind('"')
         if last_quote > 0:
-            s = s[0:last_quote + 1]
+            s = s[0 : last_quote + 1]
 
     # Remove trailing comma or colon
-    s = s.rstrip().rstrip(',').rstrip(':')
+    s = s.rstrip().rstrip(",").rstrip(":")
 
     # Remove any incomplete key-value pair after last comma
-    last_complete = max(s.rfind('}'), s.rfind(']'), s.rfind('"'))
+    last_complete = max(s.rfind("}"), s.rfind("]"), s.rfind('"'))
     if last_complete > 0:
-        s = s[0:last_complete + 1]
+        s = s[0 : last_complete + 1]
 
     # Count unclosed brackets
-    open_braces = s.count('{') - s.count('}')
-    open_brackets = s.count('[') - s.count(']')
+    open_braces = s.count("{") - s.count("}")
+    open_brackets = s.count("[") - s.count("]")
 
     if open_braces < 0 or open_brackets < 0:
         return None
 
     # Close them
-    s += ']' * open_brackets
-    s += '}' * open_braces
+    s += "]" * open_brackets
+    s += "}" * open_braces
 
     return s
 
@@ -355,15 +416,27 @@ def _repair_truncated_json(s):
 # VALIDATOR
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def validate_curriculum(data: dict) -> dict:
-    data.setdefault("curriculum_title", "Generated Curriculum")
+    if "curriculum_title" not in data:
+        raise ValueError("Missing 'curriculum_title'")
+    if "semesters" not in data or not data["semesters"]:
+        raise ValueError("Missing or empty 'semesters'")
+
+    for sem in data.get("semesters", []):
+        if "courses" not in sem or not sem["courses"]:
+            raise ValueError("Semester with no courses found")
+
     data.setdefault("level", "BTech")
     data.setdefault("skill_domain", "General")
     data.setdefault("industry_focus", "Technology")
     data.setdefault("total_semesters", len(data.get("semesters", [])))
     data.setdefault("weekly_hours", 20)
     data.setdefault("semesters", [])
-    data.setdefault("capstone_project", {"title": "Final Project", "description": "Capstone project."})
+    data.setdefault(
+        "capstone_project",
+        {"title": "Final Project", "description": "Capstone project."},
+    )
 
     for i, sem in enumerate(data["semesters"]):
         sem.setdefault("semester_number", i + 1)
@@ -374,14 +447,18 @@ def validate_curriculum(data: dict) -> dict:
             course.setdefault("course_name", f"Course {j + 1}")
             course.setdefault("credits", 4)
             course.setdefault("hours_per_week", 3)
-            course.setdefault("description", "")
+            course.setdefault("description", "A course description.")
             course.setdefault("topics", [])
+            topics = course["topics"]
+            while len(topics) < 3:
+                topics.append(f"Topic {len(topics) + 1}")
     return data
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN — generate_curriculum()
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def generate_curriculum(user_inputs: dict) -> dict:
     if not GROQ_KEYS and not OPENROUTER_KEY:
@@ -403,7 +480,8 @@ def generate_curriculum(user_inputs: dict) -> dict:
         try:
             if attempt > 1:
                 prompt_with_hint = (
-                    "IMPORTANT: Return ONLY raw JSON. No markdown. No explanation.\n\n" + prompt
+                    "IMPORTANT: Return ONLY raw JSON. No markdown. No explanation.\n\n"
+                    + prompt
                 )
             else:
                 prompt_with_hint = prompt
@@ -417,7 +495,11 @@ def generate_curriculum(user_inputs: dict) -> dict:
             validated = validate_curriculum(data)
             print("[AI Engine] Curriculum validated.")
 
-            return {"success": True, "curriculum": validated, "backend": backend}
+            return {
+                "success": True,
+                "curriculum": validated,
+                "backend": backend,
+            }
 
         except (ConnectionError, TimeoutError) as e:
             return {"success": False, "error": str(e)}
@@ -431,12 +513,16 @@ def generate_curriculum(user_inputs: dict) -> dict:
             last_error = str(e)
             print(f"[AI Engine] Unexpected error: {last_error}")
 
-    return {"success": False, "error": f"Failed after {MAX_RETRIES} attempts. {last_error}"}
+    return {
+        "success": False,
+        "error": f"Failed after {MAX_RETRIES} attempts. {last_error}",
+    }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # STATUS CHECK
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def get_backend_status() -> dict:
     """Return status of available backends for UI display."""
@@ -466,13 +552,15 @@ if __name__ == "__main__":
         print("  export OPENROUTER_API_KEY='sk-or-your_key'")
     else:
         print("\n🚀 Testing curriculum generation...")
-        result = generate_curriculum({
-            "skill": "Machine Learning",
-            "level": "BTech",
-            "semesters": 4,
-            "weekly_hours": 20,
-            "industry": "AI/Tech",
-        })
+        result = generate_curriculum(
+            {
+                "skill": "Machine Learning",
+                "level": "BTech",
+                "semesters": 4,
+                "weekly_hours": 20,
+                "industry": "AI/Tech",
+            }
+        )
         if result["success"]:
             cur = result["curriculum"]
             print(f"\n✅ Success via {result['backend']}")

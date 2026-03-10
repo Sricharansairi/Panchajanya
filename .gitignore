@@ -1,4 +1,5 @@
-# API Keys — included for project submission
+# API Keys — never push real keys
+.env
 
 # Python
 __pycache__/
