@@ -484,7 +484,7 @@ def _render_curriculum(cur, show_export=True):
 def _page_home():
     st.header("Build Industry-Ready Curricula with AI")
     st.write(
-        "**CurricuForge** generates complete, semester-wise syllabi in seconds — powered by **Llama 3.3 70B** via Groq + OpenRouter."
+        "**CurricuForge** generates complete, semester-wise syllabus in seconds — powered by **Llama 3.3 70B** via Groq + OpenRouter."
     )
 
     status = get_backend_status()
