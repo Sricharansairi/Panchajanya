@@ -7,17 +7,17 @@ Supports Unicode (Telugu, Hindi, Tamil, etc.) via Arial Unicode MS.
 
 import io
 import os
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.lib.units import mm
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
-from reportlab.platypus import (
+from reportlab.lib.pagesizes import A4  # type: ignore
+from reportlab.lib import colors  # type: ignore
+from reportlab.lib.units import mm  # type: ignore
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # type: ignore
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY  # type: ignore
+from reportlab.platypus import (  # type: ignore
     SimpleDocTemplate, Paragraph, Spacer, Table,
     TableStyle, PageBreak, HRFlowable
 )
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase import pdfmetrics  # type: ignore
+from reportlab.pdfbase.ttfonts import TTFont  # type: ignore
 
 # ─────────────────────────────────────────
 # UNICODE FONT REGISTRATION
@@ -572,18 +572,18 @@ def generate_text_pdf(title: str, content: str, subtitle: str = "") -> bytes:
             continue
         # Detect markdown headings
         if line.startswith("### "):
-            story.append(Paragraph(line[4:], heading_style))
+            story.append(Paragraph(line[4:], heading_style))  # type: ignore
         elif line.startswith("## "):
-            story.append(Paragraph(line[3:], heading_style))
+            story.append(Paragraph(line[3:], heading_style))  # type: ignore
         elif line.startswith("# "):
-            story.append(Paragraph(line[2:], heading_style))
+            story.append(Paragraph(line[2:], heading_style))  # type: ignore
         elif line.startswith("**") and line.endswith("**"):
             story.append(Paragraph(f"<b>{line.strip('*')}</b>", heading_style))
         elif line.startswith("- ") or line.startswith("• "):
-            bullet_text = line[2:].replace("**", "").replace("*", "")
+            bullet_text = line[2:].replace("**", "").replace("*", "")  # type: ignore
             story.append(Paragraph(f"&bull; {bullet_text}", body_style))
         elif line.startswith("* "):
-            bullet_text = line[2:].replace("**", "").replace("*", "")
+            bullet_text = line[2:].replace("**", "").replace("*", "")  # type: ignore
             story.append(Paragraph(f"&bull; {bullet_text}", body_style))
         else:
             # Clean markdown bold/italic

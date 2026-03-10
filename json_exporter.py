@@ -64,9 +64,10 @@ def export_lms_ready(curriculum: dict) -> bytes:
         sem_title = semester.get("semester_title", "")
 
         for course in semester.get("courses", []):
-            credits = course.get("credits", 4)
-            total_credits += credits
-            total_courses += 1
+            credits_raw = course.get("credits", 4)
+            credits = int(credits_raw) if isinstance(credits_raw, (int, float, str)) else 4
+            total_credits += credits  # type: ignore
+            total_courses += 1  # type: ignore
 
             course_catalog.append({
                 "id":               course.get("course_code", ""),

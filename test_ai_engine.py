@@ -4,7 +4,7 @@ Run with: python test_ai_engine.py
 """
 
 import json
-from ai_engine import build_prompt, extract_json, validate_curriculum
+from ai_engine import build_prompt, extract_json, validate_curriculum  # type: ignore
 
 PASS = "✅ PASS"
 FAIL = "❌ FAIL"
@@ -162,7 +162,7 @@ check("Valid curriculum passes validation",  result["curriculum_title"] == "ML B
 # Test 14: Missing curriculum_title raises error
 try:
     bad = make_valid_curriculum()
-    del bad["curriculum_title"]
+    del bad["curriculum_title"]  # type: ignore
     validate_curriculum(bad)
     check("Raises error on missing curriculum_title", False)
 except ValueError:
@@ -171,7 +171,7 @@ except ValueError:
 # Test 15: Missing semesters raises error
 try:
     bad = make_valid_curriculum()
-    del bad["semesters"]
+    del bad["semesters"]  # type: ignore
     validate_curriculum(bad)
     check("Raises error on missing semesters",        False)
 except ValueError:
@@ -187,54 +187,54 @@ except ValueError:
 
 # Test 17: Auto-fills missing course_code
 no_code = make_valid_curriculum()
-del no_code["semesters"][0]["courses"][0]["course_code"]
+del no_code["semesters"][0]["courses"][0]["course_code"]  # type: ignore
 result = validate_curriculum(no_code)
 code = result["semesters"][0]["courses"][0]["course_code"]
 check("Auto-fills missing course_code",      len(code) > 0, f"Generated: {code}")
 
 # Test 18: Auto-fills missing credits with default 4
 no_credits = make_valid_curriculum()
-del no_credits["semesters"][0]["courses"][0]["credits"]
+del no_credits["semesters"][0]["courses"][0]["credits"]  # type: ignore
 result = validate_curriculum(no_credits)
 check("Auto-fills missing credits → 4",      result["semesters"][0]["courses"][0]["credits"] == 4)
 
 # Test 19: Auto-fills missing hours_per_week with default 3
 no_hours = make_valid_curriculum()
-del no_hours["semesters"][0]["courses"][0]["hours_per_week"]
+del no_hours["semesters"][0]["courses"][0]["hours_per_week"]  # type: ignore
 result = validate_curriculum(no_hours)
 check("Auto-fills missing hours_per_week → 3", result["semesters"][0]["courses"][0]["hours_per_week"] == 3)
 
 # Test 20: Auto-fills missing topics
 no_topics = make_valid_curriculum()
-del no_topics["semesters"][0]["courses"][0]["topics"]
+del no_topics["semesters"][0]["courses"][0]["topics"]  # type: ignore
 result = validate_curriculum(no_topics)
 topics = result["semesters"][0]["courses"][0]["topics"]
 check("Auto-fills missing topics list",      isinstance(topics, list) and len(topics) >= 3)
 
 # Test 21: Extends topics list if less than 3
 short_topics = make_valid_curriculum()
-short_topics["semesters"][0]["courses"][0]["topics"] = ["Only one topic"]
+short_topics["semesters"][0]["courses"][0]["topics"] = ["Only one topic"]  # type: ignore
 result = validate_curriculum(short_topics)
 topics = result["semesters"][0]["courses"][0]["topics"]
 check("Extends topics list to minimum 3",    len(topics) >= 3, f"Topics count: {len(topics)}")
 
 # Test 22: Auto-fills missing description
 no_desc = make_valid_curriculum()
-del no_desc["semesters"][0]["courses"][0]["description"]
+del no_desc["semesters"][0]["courses"][0]["description"]  # type: ignore
 result = validate_curriculum(no_desc)
 desc = result["semesters"][0]["courses"][0]["description"]
 check("Auto-fills missing description",      isinstance(desc, str) and len(desc) > 0)
 
 # Test 23: Auto-adds capstone if missing
 no_capstone = make_valid_curriculum()
-del no_capstone["capstone_project"]
+del no_capstone["capstone_project"]  # type: ignore
 result = validate_curriculum(no_capstone)
 check("Auto-adds missing capstone_project",  "capstone_project" in result)
 
 # Test 24: Semester with no courses raises error
 try:
     no_courses = make_valid_curriculum()
-    no_courses["semesters"][0]["courses"] = []
+    no_courses["semesters"][0]["courses"] = []  # type: ignore
     validate_curriculum(no_courses)
     check("Raises error on semester with no courses", False)
 except ValueError:
@@ -261,7 +261,7 @@ check("Handles special chars in skill name",  "C++" in p)
 
 # Test 28: Multiple courses auto-code generation
 multi_course = make_valid_curriculum()
-multi_course["semesters"][0]["courses"] = [
+multi_course["semesters"][0]["courses"] = [  # type: ignore
     {"course_name": f"Course {i}"} for i in range(4)
 ]
 result = validate_curriculum(multi_course)
